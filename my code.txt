@@ -1,0 +1,67 @@
+#Unsupervised consensus clustering
+# Load packages
+library(limma)
+library(ConsensusClusterPlus)
+
+# Read data
+rt <- read.csv()         # (placeholder)
+rt <- read.table()       # Read data
+rt_transposed <- t(rt)   # Transpose (swap rows and columns)
+da <- as.matrix(rt_transposed)
+workDir <- getwd()
+
+# Start clustering
+maxK <- 9
+results <- ConsensusClusterPlus(da,
+                     maxK = maxK,
+                     reps = 50,
+                     pItem = 0.9,
+                     pFeature = 1,
+                     title = workDir,
+                     clusterAlg = "km",
+                     distance = "euclidean",
+                     seed = 123456,
+                     plot = "pdf")
+calcICL(results, title = "consensusScore", plot = "pdf")
+
+# Choose optimal k based on algorithm
+Kvec <- 2:9
+x1 <- 0.1
+x2 <- 0.9                     # threshold defining the intermediate sub-interval
+PAC <- rep(NA, length(Kvec))
+names(PAC) <- paste("K=", Kvec, sep = "")  # from 2 to maxK
+for (i in Kvec) {
+  M <- results[[i]]$consensusMatrix
+  Fn <- ecdf(M[lower.tri(M)])
+  PAC[i-1] <- Fn(x2) - Fn(x1)
+}
+# Optimal k value
+optK <- Kvec[which.min(PAC)]
+
+# Extract clustering results for a specified k, adjust as needed
+clusterNum <- 2
+cluster <- results[[clusterNum]][["consensusClass"]]
+
+
+# mRMR
+library('mRMRe')
+mrmr_feature <- data[, c(1:2563)]
+mrmr_feature$y <- data[, 2564]
+# The data used for filtering must include the Y variable
+target_indices <- which(names(mrmr_feature) == 'y')
+# However, mRMR.data requires all data to be numeric, so convert non-numeric columns to numeric
+for (m in which(sapply(mrmr_feature, class) != "numeric")) {
+  mrmr_feature[, m] <- as.numeric(mrmr_feature[, m])
+}
+# Convert to mRMR.data format for use
+Data <- mRMR.data(data = data.frame(mrmr_feature))
+# 'data' is the dataset, target_indices is the Y (label) column index, i.e., the column to compute relevance against
+# feature_count is the number of features to select
+mrmr <- mRMR.ensemble(data = Data, target_indices = target_indices,
+                      feature_count = n, solution_count = 1)
+# "n" is the number of features
+# Get the indices of selected features; they are stored in mrmr@filters[[as.character(target_indices)]]
+index <- mrmr@filters[[as.character(mrmr@target_indices)]]
+# Extract the training set features
+train_feature <- mrmr_feature[, index]
+```
